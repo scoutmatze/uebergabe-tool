@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+/* DPSG-Branding – konsistent zu Reisekosten & GSK */
+@theme {
+  --color-dpsg-blue: #003056;
+  --color-dpsg-red: #8b0a1e;
+  --font-narrow: "PT Sans Narrow", "Arial Narrow", sans-serif;
+}
+
+:root {
+  --background: #ffffff;
+  --foreground: #1a1a1a;
+}
+
+html,
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-narrow);
+}
+
+/* Nur "nackte" Links einfärben, nicht solche mit eigener Textfarbe (z.B. Buttons) */
+a:not([class*="text-"]) {
+  color: var(--color-dpsg-blue);
+}

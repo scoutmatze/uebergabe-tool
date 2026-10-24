@@ -1,0 +1,141 @@
+// DPSG Übergabe-Tool – Datenmodell
+// Hierarchie: Uebergabe -> Themenkomplex -> Unterthema -> Eintrag (Aufnahme) -> Stichpunkt
+// Volltext über to_tsvector('german', ...), semantische Suche über pgvector (Embeddings je Stichpunkt).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN // Nutzerverwaltung, alles sehen/bearbeiten
+  EDITOR // darf Übergaben anlegen, aufnehmen, bearbeiten (z. B. Annka)
+  VIEWER // darf zugewiesene Übergaben lesen/durchsuchen
+}
+
+enum EintragStatus {
+  RECORDED // Audio liegt vor, noch nicht transkribiert
+  TRANSCRIBING // Transkription läuft (Azure Whisper)
+  TRANSCRIBED // Transkript vorhanden, Stichpunkte ausstehend
+  SUMMARIZED // Stichpunkte erzeugt (Azure Chat-Modell)
+  ERROR // Fehler in der Pipeline (siehe error-Feld)
+}
+
+model User {
+  id            Int       @id @default(autoincrement())
+  email         String    @unique
+  name          String
+  passwordHash  String? // bcrypt-Hash (PIN); null solange Einladung offen
+  role          Role      @default(VIEWER)
+  inviteToken   String?   @unique // gesetzt bei offener Einladung
+  inviteExpires DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  uebergaben Uebergabe[] @relation("OwnerUebergaben")
+  zugriffe   Zugriff[]
+}
+
+model Uebergabe {
+  id        String   @id @default(cuid())
+  titel     String
+  rolleName String? // z. B. "Vorstand DV München & Freising" – die zu übergebende Funktion
+  begriffe  String? // Eigennamen/Fachbegriffe, kommagetrennt – als Kontext an Whisper
+  ownerId   Int
+  owner     User     @relation("OwnerUebergaben", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  themenkomplexe Themenkomplex[]
+  zugriffe       Zugriff[]
+}
+
+// Wer darf welche Übergabe lesen (für VIEWER-Zuweisung)
+model Zugriff {
+  id          String    @id @default(cuid())
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  uebergabeId String
+  uebergabe   Uebergabe @relation(fields: [uebergabeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, uebergabeId])
+}
+
+model Themenkomplex {
+  id          String    @id @default(cuid())
+  titel       String
+  position    Int       @default(0)
+  uebergabeId String
+  uebergabe   Uebergabe @relation(fields: [uebergabeId], references: [id], onDelete: Cascade)
+
+  unterthemen Unterthema[]
+
+  @@index([uebergabeId])
+}
+
+model Unterthema {
+  id              String        @id @default(cuid())
+  titel           String
+  position        Int           @default(0)
+  themenkomplexId String
+  themenkomplex   Themenkomplex @relation(fields: [themenkomplexId], references: [id], onDelete: Cascade)
+
+  eintraege  Eintrag[]
+  materialien Material[]
+
+  @@index([themenkomplexId])
+}
+
+enum MaterialArt {
+  FILE
+  LINK
+}
+
+model Material {
+  id           String      @id @default(cuid())
+  unterthemaId String
+  unterthema   Unterthema  @relation(fields: [unterthemaId], references: [id], onDelete: Cascade)
+  art          MaterialArt
+  titel        String
+  url          String? // LINK: Ziel-URL
+  filePath     String? // FILE: Pfad im Volume
+  fileName     String? // FILE: Originaldateiname
+  fileSize     Int? // FILE: Bytes
+  mimeType     String?
+  position     Int         @default(0)
+  createdAt    DateTime    @default(now())
+
+  @@index([unterthemaId])
+}
+
+// Ein Eintrag = eine Sprachnachricht inkl. abgeleitetem Transkript
+model Eintrag {
+  id           String        @id @default(cuid())
+  unterthemaId String
+  unterthema   Unterthema    @relation(fields: [unterthemaId], references: [id], onDelete: Cascade)
+  audioPath    String? // Pfad auf der Platte (Volume), nicht in der DB
+  audioMimeType String?
+  transcript   String? // Roh-Transkript (bleibt erhalten, damit Stichpunkte neu generierbar sind)
+  status       EintragStatus @default(RECORDED)
+  error        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  stichpunkte Stichpunkt[]
+
+  @@index([unterthemaId])
+}
+
+model Stichpunkt {
+  id        String @id @default(cuid())
+  eintragId String
+  eintrag   Eintrag @relation(fields: [eintragId], references: [id], onDelete: Cascade)
+  text      String
+  position  Int    @default(0)
+
+  @@index([eintragId])
+}
