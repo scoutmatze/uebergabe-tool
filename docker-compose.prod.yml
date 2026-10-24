@@ -1,28 +1,4 @@
 services:
-  traefik:
-    image: traefik:v2.11 # NICHT v3 (Docker-API-Inkompatibilität)
-    restart: unless-stopped
-    command:
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      # Netzname muss zum externen Netz unten passen:
-      - "--providers.docker.network=uebergabe_web"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
-      - "--certificatesresolvers.le.acme.tlschallenge=true"
-      - "--certificatesresolvers.le.acme.email=mathias.meyer@dpsg1300.de"
-      - "--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - letsencrypt:/letsencrypt
-    networks:
-      - web
-
   app:
     build: .
     restart: unless-stopped
@@ -37,10 +13,13 @@ services:
       - internal
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.uebergabe.rule=Host(`uebergabe.dpsgonline.de`)"
-      - "traefik.http.routers.uebergabe.entrypoints=websecure"
-      - "traefik.http.routers.uebergabe.tls.certresolver=le"
-      - "traefik.http.services.uebergabe.loadbalancer.server.port=3000"
+      # Eigene, eindeutige Router-/Service-Namen (kollidieren nicht mit den anderen bundesamt-Apps):
+      - "traefik.http.routers.uebergabearchiv.rule=Host(`uebergabe.dpsgonline.de`)"
+      - "traefik.http.routers.uebergabearchiv.entrypoints=websecure"
+      # WICHTIG: certresolver-Name muss dem laufenden Traefik auf dem bundesamt-Server entsprechen.
+      # Beim Reisekosten-Stack ist das i.d.R. "letsencrypt" – vor dem Start verifizieren (siehe README).
+      - "traefik.http.routers.uebergabearchiv.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uebergabearchiv.loadbalancer.server.port=3000"
 
   db:
     image: postgres:16-alpine
@@ -55,13 +34,13 @@ services:
       - internal
 
 volumes:
-  letsencrypt:
   pgdata:
   audio:
   material:
 
 networks:
+  # Bestehendes, vom laufenden Traefik verwaltetes Netz auf dem bundesamt-Server:
   web:
-    name: uebergabe_web
+    name: dpsg-reisekosten_web
     external: true
   internal:

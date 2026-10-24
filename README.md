@@ -1,53 +1,28 @@
-# DPSG Übergabe-Tool
+# DPSG Übergabe – Archiv
 
-Werkzeug für **Amtsübergaben** in der DPSG: Die scheidende Person spricht ihr Wissen pro
-Themenkomplex und Unterthema als **Sprachnachricht** ein – das Tool transkribiert lokal, verdichtet
-den Text per KI zu **Stichpunkten** und macht alles für die Nachfolge **durchsuchbar**. Ergänzt um
-hochgeladene Dokumente und Links wird daraus ein vollständiges, nachschlagbares Übergabe-Archiv.
+Schlanke **Lese-Variante** der Übergabe-App. Nur noch Nachschlagen, kein Erzeugen:
 
-Entstanden für die Übergabe von Annka (DPSG-Bundesverband); läuft unter
-`uebergabe.dpsgonline.de`.
+- **Login** mit bestehenden Konten/PINs (unveränderte Auth-Library)
+- **Dashboard**: Liste der zugänglichen Übergaben (Admin sieht alle)
+- **Leseansicht** mit **clientseitiger Volltextsuche** über Stichpunkte, Transkripte, Unterthemen und Materialien
+- **Audio-Wiedergabe** und **Datei-Download** (hinter demselben Zugriffsschutz)
 
-## Zwei Branches
-
-| Branch | Zweck |
-|--------|-------|
-| **`main`** | Vollständiges Tool mit KI: Aufnahme, lokale Transkription (faster-whisper), Stichpunkt-Generierung (OpenAI), Bearbeitung, Nutzer-/Zugriffsverwaltung. Die **wiederverwendbare Basis** für künftige Übergaben. |
-| **`archiv`** | Schlankes **Lese-Endprodukt**: nur Login, Leseansicht, Volltextsuche, Audio-/Datei-Download. Kein Python/Whisper, kein OpenAI → kleines Image, minimaler Ressourcenbedarf. Für den dauerhaften, kostengünstigen Archivbetrieb nach abgeschlossener Übergabe. |
-
-Das Archiv ist eine Ableitung von `main` – gleiches Datenmodell und Auth, nur ohne die
-schreibenden/KI-Teile. Eine bestehende Datenbank lässt sich unverändert vom vollen Tool ins Archiv
-übernehmen.
-
-## Funktionen (main)
-
-- **Aufnahme** im Browser pro Themenkomplex/Unterthema (MediaRecorder)
-- **Transkription lokal** über faster-whisper (Modell `medium`, CPU) – keine Audio-Daten in der Cloud
-- **Stichpunkte** aus dem Transkript über die OpenAI-API (`gpt-4o-mini`), mit Begriffs-/Namenskontext je Übergabe für bessere Eigennamen-Erkennung
-- **Bearbeiten**: Stichpunkte und Transkript korrigieren, neu generieren, Eintrag neu aufnehmen oder löschen
-- **Materialien**: Dateien (max. 25 MB) und Links je Unterthema
-- **Rollen & Einladungen**: ADMIN/EDITOR/VIEWER, Einladungslinks mit selbstgesetztem PIN, Lesezugriff pro Übergabe
-- **Leseansicht** mit Volltextsuche für die Empfänger:innen
+**Bewusst entfernt** gegenüber der vollen App: Aufnahme + Pipeline (`/api/process`), faster-whisper
+(Python/ffmpeg), OpenAI, alle Editier-/Verwaltungs-Funktionen, Admin-Nutzerverwaltung,
+Einladungs-Flow. Dadurch: kleineres Image, kein Modell-Download, minimaler RAM-Bedarf, keine
+laufenden KI-Kosten. Das Archiv ist auf DB-Ebene **rein lesend**.
 
 ## Stack
 
-Next.js 15 (App Router) · TypeScript · Tailwind v4 · Prisma 6 · PostgreSQL 16 · Docker · Traefik v2.11.
-`main` zusätzlich: Python + faster-whisper (lokal), OpenAI-API. Auth: eigene Library (jose-JWT,
-bcrypt-PIN).
+Next.js 15 · TypeScript · Tailwind v4 · Prisma 6 · PostgreSQL 16 · Docker. Kein eigener Traefik –
+klinkt sich auf dem bundesamt-Server in das bestehende `dpsg-reisekosten_web` ein.
 
-## Setup
+## Deployment & Migration
 
-1. `.env` aus `.env.example` erzeugen und befüllen (DB, `APP_SECRET`, `OPENAI_API_KEY`, Admin-Bootstrap).
-2. Externes Docker-Netz anlegen bzw. vorhandenes nutzen (Traefik).
-3. `docker compose -f docker-compose.prod.yml up -d --build`
-4. Schema anlegen: `docker compose -f docker-compose.prod.yml exec app npx prisma@6 db push`
-5. Erst-Admin: `curl -X POST https://<host>/api/auth/bootstrap` (einmalig, solange kein User existiert).
+Siehe **RUNBOOK.md** – vollständiger Ablauf: Daten vom alten Server sichern, übertragen, Archiv
+aufsetzen, testen, Domain umziehen, alten Server abschalten. Bestehende Logins bleiben gültig.
 
-Details und die gelernten Deployment-Eigenheiten stehen in den Kommentaren von `Dockerfile` und
-`docker-compose.prod.yml`.
+## Betrieb
 
-## Hinweise
-
-- `output: "standalone"` in `next.config.ts` ist Pflicht.
-- Debian-Basis (`node:22-slim`), nicht Alpine – wegen der faster-whisper/PyAV-Wheels.
-- `.env` ist bewusst nicht eingecheckt; Secrets gehören nicht ins Repo.
+- Rein lesend: kein `prisma db push` im Normalbetrieb nötig (das Schema kommt mit dem DB-Dump).
+- Datensicherung: gelegentlicher `pg_dump` plus die Volumes `…_audio` / `…_material` genügen.

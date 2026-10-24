@@ -1,6 +1,6 @@
 {
-  "name": "uebergabe.dpsgonline.de",
-  "version": "0.1.0",
+  "name": "uebergabe-archiv.dpsgonline.de",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -14,7 +14,6 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "openai": "^4.52.0",
     "bcryptjs": "^2.4.3",
     "jose": "^5.9.6"
   },
